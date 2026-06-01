@@ -17,32 +17,62 @@ app.use(express.json());
    MongoDB Connection
 ========================= */
 
-mongoose.connect( process.env.MONGO_URI)
+mongoose.connect(process.env.MONGO_URI)
     .then(() => {
-        console.log("✅ MongoDB Connected");
+        logActivity("✅ MongoDB Connected");
     })
     .catch((err) => {
-        console.log("❌ MongoDB Error:", err.message);
+        logActivity("❌ MongoDB Error: " + err.message);
     });
 
 /* =========================
-   User Schema & Model
+   Event Emitter (SSE)
+========================= */
+import { EventEmitter } from "events";
+const logEmitter = new EventEmitter();
+
+let logs = [];
+function logActivity(message) {
+    console.log(message);
+    const logObj = { id: Date.now(), time: new Date().toLocaleTimeString(), message };
+    logs.push(logObj);
+    if (logs.length > 50) logs.shift(); // Keep last 50
+    logEmitter.emit("log", logObj);
+}
+
+app.get("/api/logs", (req, res) => {
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+
+    res.write(`data: ${JSON.stringify(logs)}\n\n`);
+
+    const listener = (logObj) => {
+        res.write(`data: ${JSON.stringify([logObj])}\n\n`);
+    };
+
+    logEmitter.on("log", listener);
+
+    req.on("close", () => {
+        logEmitter.off("log", listener);
+    });
+});
+
+/* =========================
+   Schemas & Models
 ========================= */
 
 const userSchema = new mongoose.Schema({
-    username: {
-        type: String,
-        required: true
-    },
+    username: { type: String, required: true },
+    email: { type: String, required: true, unique: true }
+});
 
-    email: {
-        type: String,
-        required: true,
-        unique: true
-    }
+const settingSchema = new mongoose.Schema({
+    cronTime: { type: String, default: "20:00" }, // e.g. "20:00"
 });
 
 const User = mongoose.model("User", userSchema);
+const Setting = mongoose.model("Setting", settingSchema);
 
 /* =========================
    Email Transporter
@@ -105,7 +135,7 @@ async function checkUser(user) {
 
     try {
 
-        console.log(`\n🔍 Checking ${user.username}`);
+        logActivity(`\n🔍 Checking ${user.username}`);
 
         const query = `
         query recentAcSubmissions($username: String!, $limit: Int!) {
@@ -133,9 +163,8 @@ async function checkUser(user) {
         const submissions =
             response?.data?.data?.recentAcSubmissionList || [];
 
-        console.log(
-            "Accepted Submissions Found:",
-            submissions.length
+        logActivity(
+            `Accepted Submissions Found: ${submissions.length}`
         );
 
         const todayIST = new Date()
@@ -146,7 +175,7 @@ async function checkUser(user) {
                 }
             );
 
-        console.log("Today IST:", todayIST);
+        logActivity(`Today IST: ${todayIST}`);
 
         let solvedToday = false;
 
@@ -165,9 +194,7 @@ async function checkUser(user) {
                     }
                 );
 
-            console.log(
-                `${sub.title} -> ${submissionIST}`
-            );
+            logActivity(`${sub.title} -> ${submissionIST}`);
 
             if (submissionIST === todayIST) {
                 solvedToday = true;
@@ -175,7 +202,7 @@ async function checkUser(user) {
             }
         }
 
-        console.log(
+        logActivity(
             `${user.username} => Solved Today: ${solvedToday}`
         );
 
@@ -200,9 +227,8 @@ https://leetcode.com/u/${user.username}/
 `
                 });
 
-            console.log(
-                "✅ Success Email Sent:",
-                info.messageId
+            logActivity(
+                "✅ Success Email Sent: " + info.messageId
             );
 
         } else {
@@ -224,21 +250,19 @@ https://leetcode.com/u/${user.username}/
 `
                 });
 
-            console.log(
-                "📧 Reminder Sent:",
-                info.messageId
+            logActivity(
+                "📧 Reminder Sent: " + info.messageId
             );
         }
 
     } catch (error) {
 
-        console.log(
+        logActivity(
             "❌ CHECK USER ERROR"
         );
 
-        console.log(
-            error.response?.data ||
-            error.message
+        logActivity(
+            error.response?.data ? JSON.stringify(error.response.data) : error.message
         );
     }
 }
@@ -270,39 +294,83 @@ app.get("/check-now", async (req, res) => {
 });
 
 /* =========================
-   Cron Job
+   Cron Job & Settings
 ========================= */
 
-cron.schedule(
-    "0 20 * * *",
-    async () => {
+let currentCronJob = null;
 
-        try {
-
-            console.log(
-                "🚀 Running Daily Check..."
-            );
-
-            const users =
-                await User.find();
-
-            for (const user of users) {
-                await checkUser(user);
-            }
-
-        } catch (error) {
-
-            console.log(
-                "Cron Error:",
-                error.message
-            );
+async function setupCron() {
+    try {
+        let setting = await Setting.findOne();
+        if (!setting) {
+            setting = await Setting.create({ cronTime: "20:00" });
         }
 
-    },
-    {
-        timezone: "Asia/Kolkata"
+        if (currentCronJob) {
+            currentCronJob.stop();
+        }
+
+        const [hour, minute] = setting.cronTime.split(":");
+        const cronString = `${minute} ${hour} * * *`;
+
+        logActivity(`🕒 Setting up cron job for ${setting.cronTime} (${cronString})`);
+
+        currentCronJob = cron.schedule(
+            cronString,
+            async () => {
+                try {
+                    logActivity("🚀 Running Daily Check...");
+                    const users = await User.find();
+                    for (const user of users) {
+                        await checkUser(user);
+                    }
+                    logActivity("✅ Daily Check Complete!");
+                } catch (error) {
+                    logActivity("Cron Error: " + error.message);
+                }
+            },
+            { timezone: "Asia/Kolkata" }
+        );
+    } catch (e) {
+        logActivity("❌ Error setting up cron: " + e.message);
     }
-);
+}
+
+// Call on startup
+setupCron();
+
+app.get("/api/settings", async (req, res) => {
+    try {
+        let setting = await Setting.findOne();
+        if (!setting) setting = await Setting.create({ cronTime: "20:00" });
+        res.json(setting);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post("/api/settings", async (req, res) => {
+    try {
+        const { cronTime } = req.body;
+        if (!cronTime) return res.status(400).json({ error: "cronTime (HH:mm) is required" });
+
+        let setting = await Setting.findOne();
+        if (!setting) {
+            setting = await Setting.create({ cronTime });
+        } else {
+            setting.cronTime = cronTime;
+            await setting.save();
+        }
+
+        // Restart cron with new time
+        await setupCron();
+
+        logActivity(`🕒 Global check time updated to ${cronTime}`);
+        res.json({ message: "Settings updated successfully", setting });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
 
 /* =========================
    Routes
