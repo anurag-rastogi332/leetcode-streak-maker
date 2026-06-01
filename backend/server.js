@@ -82,15 +82,14 @@ const Setting = mongoose.model("Setting", settingSchema);
 ========================= */
 
 const transporter = nodemailer.createTransport({
-    host: "smtp.gmail.com",
+    host: "192.178.211.108", // Used IP explicitly instead of smtp.gmail.com
     port: 587,
     secure: false, // true for 465, false for other ports
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
     },
-    // Adding extra timeouts and IPv4 forcing
-    family: 4,
+    // Adding extra timeouts
     connectionTimeout: 10000, 
     greetingTimeout: 10000,
     socketTimeout: 10000,
