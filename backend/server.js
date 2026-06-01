@@ -84,13 +84,19 @@ const Setting = mongoose.model("Setting", settingSchema);
 const transporter = nodemailer.createTransport({
     host: "smtp.gmail.com",
     port: 465,
-    secure: true, // true for 465, false for other ports
+    secure: true, 
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
     },
-    // Force IPv4 if IPv6 fails (fixes ENETUNREACH on some networks)
-    family: 4 
+    // Adding extra timeouts and IPv4 forcing
+    family: 4,
+    connectionTimeout: 10000, 
+    greetingTimeout: 10000,
+    socketTimeout: 10000,
+    tls: {
+       rejectUnauthorized: false
+    }
 });
 /* =========================
    Register User
