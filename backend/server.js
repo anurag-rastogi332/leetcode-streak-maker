@@ -274,7 +274,7 @@ app.get("/check-now", async (req, res) => {
 ========================= */
 
 cron.schedule(
-    "5 22 * * *",
+    "0 20 * * *",
     async () => {
 
         try {
