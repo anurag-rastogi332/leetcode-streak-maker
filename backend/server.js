@@ -32,9 +32,12 @@ import { EventEmitter } from "events";
 const logEmitter = new EventEmitter();
 
 let logs = [];
+let logCounter = 0;
+
 function logActivity(message) {
     console.log(message);
-    const logObj = { id: Date.now(), time: new Date().toLocaleTimeString(), message };
+    logCounter++;
+    const logObj = { id: logCounter, time: new Date().toLocaleTimeString(), message };
     logs.push(logObj);
     if (logs.length > 50) logs.shift(); // Keep last 50
     logEmitter.emit("log", logObj);
