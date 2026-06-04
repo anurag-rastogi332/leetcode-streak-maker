@@ -5,8 +5,12 @@ import nodemailer from "nodemailer";
 import cron from "node-cron";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
+import dns from "dns";
 
 dotenv.config();
+
+dns.setDefaultResultOrder("ipv4first");
+console.log("✅ IPv4 First Enabled");
 
 const app = express();
 
