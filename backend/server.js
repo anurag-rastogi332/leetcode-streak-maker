@@ -151,7 +151,7 @@ async function checkUser(user) {
             }
         }
         `;
-
+       logActivity("STEP 1: Calling LeetCode API");
         const response = await axios.post(
             "https://leetcode.com/graphql",
             {
@@ -162,6 +162,7 @@ async function checkUser(user) {
                 }
             }
         );
+        logActivity("STEP 2: LeetCode API Success");
 
         const submissions =
             response?.data?.data?.recentAcSubmissionList || [];
@@ -210,7 +211,7 @@ async function checkUser(user) {
         );
 
         if (solvedToday) {
-
+          logActivity("STEP 3: Sending Success Email");
             const info =
                 await transporter.sendMail({
                    from: process.env.EMAIL_USER,
@@ -229,13 +230,14 @@ Profile:
 https://leetcode.com/u/${user.username}/
 `
                 });
+                logActivity("STEP 4: Success Email Sent");
 
             logActivity(
                 "✅ Success Email Sent: " + info.messageId
             );
 
         } else {
-
+    logActivity("STEP 3: Sending Reminder Email");
             const info =
                 await transporter.sendMail({
                    from: process.env.EMAIL_USER,
@@ -252,6 +254,7 @@ Profile:
 https://leetcode.com/u/${user.username}/
 `
                 });
+                logActivity("STEP 4: Reminder Email Sent");
 
             logActivity(
                 "📧 Reminder Sent: " + info.messageId
@@ -260,14 +263,30 @@ https://leetcode.com/u/${user.username}/
 
     } catch (error) {
 
-        logActivity(
-            "❌ CHECK USER ERROR"
-        );
+    logActivity("❌ CHECK USER ERROR");
 
+    logActivity("MESSAGE: " + error.message);
+
+    if (error.code) {
+        logActivity("CODE: " + error.code);
+    }
+
+    if (error.response) {
         logActivity(
-            error.response?.data ? JSON.stringify(error.response.data) : error.message
+            "RESPONSE: " +
+            JSON.stringify(error.response.data)
         );
     }
+
+    console.log("====================================");
+    console.log("FULL ERROR OBJECT");
+    console.log(error);
+    console.log("====================================");
+
+    if (error.stack) {
+        console.log(error.stack);
+    }
+}
 }
 
 /* =========================
