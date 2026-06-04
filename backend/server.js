@@ -88,6 +88,30 @@ const transporter = nodemailer.createTransport({
         pass: process.env.EMAIL_PASS
     }
 });
+
+
+transporter.verify((error, success) => {
+
+    if (error) {
+
+        console.error("SMTP VERIFY ERROR");
+        console.error(error);
+
+        logActivity(
+            "❌ SMTP VERIFY FAILED: " +
+            error.message
+        );
+
+    } else {
+
+        console.log("SMTP SERVER READY");
+
+        logActivity(
+            "✅ SMTP SERVER READY"
+        );
+    }
+
+});
 /* =========================
    Register User
 ========================= */
